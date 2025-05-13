@@ -114,68 +114,66 @@ def run_demo():
             # Capture images for calibration
             frame_count += 1
             for i, cam in enumerate(cameras):
-                # Grab a new frame for calibration (to ensure it's not the one we've been processing)
                 ret, cal_frame = cam.read()
                 if not ret:
                     continue
-                
-                # Save the image
+
                 filename = f"{calib_dir}/cam{i+1}_frame{frame_count}.jpg"
                 cv2.imwrite(filename, cal_frame)
-                
-                # Process for calibration
+
                 gray = cv2.cvtColor(cal_frame, cv2.COLOR_BGR2GRAY)
                 ret_chess, corners = cv2.findChessboardCorners(gray, pattern_size, None)
-                
                 if ret_chess:
                     # Refine corner positions
                     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-                    corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
-                    
-                    # Store data
+                    corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
                     cam_calibration_data[i]["obj_points"].append(objp)
-                    cam_calibration_data[i]["img_points"].append(corners)
+                    cam_calibration_data[i]["img_points"].append(corners2)
                     cam_calibration_data[i]["images"].append(filename)
-                    
                     print(f"Saved calibration image for camera {i+1} (total: {len(cam_calibration_data[i]['images'])})")
                 else:
                     print(f"Warning: Could not find chessboard in camera {i+1}")
-    
+            
+    cv2.destroyAllWindows()
+    print("\nCalibration complete. You can now use the calibration data with the main blending program.")
+
+if __name__ == "__main__":
+    run_demo()
     # Release cameras
     for cam in cameras:
         cam.release()
-    
+
     # Perform calibration for each camera
     print("\nPerforming camera calibration...")
-    
+
     for i, data in enumerate(cam_calibration_data):
         if not data["img_points"]:
             print(f"Camera {i+1}: No calibration data collected")
             continue
-        
+
         print(f"Camera {i+1}: Calibrating with {len(data['img_points'])} images...")
-        
+
         # Get image dimensions from first saved image
         img = cv2.imread(data["images"][0], cv2.IMREAD_GRAYSCALE)
         img_size = img.shape[::-1]
-        
+
         # Calibrate camera
         ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
             data["obj_points"], data["img_points"], img_size, None, None
         )
-        
+
         if ret:
             # Save calibration data
-            np.savez(f"camera{i+1}_calibration.npz", 
-                     camera_matrix=mtx, 
-                     dist_coeffs=dist,
-                     rvecs=rvecs,
-                     tvecs=tvecs)
-            
+            np.savez(f"camera{i+1}_calibration.npz",
+                        camera_matrix=mtx,
+                        dist_coeffs=dist,
+                        rvecs=rvecs,
+                        tvecs=tvecs)
+
             print(f"Camera {i+1}: Calibration successful")
             print(f"  - Camera Matrix:\n{mtx}")
             print(f"  - Distortion Coefficients: {dist.ravel()}")
-            
+
             # Calculate reprojection error
             mean_error = 0
             for j in range(len(data["obj_points"])):
@@ -184,13 +182,10 @@ def run_demo():
                 )
                 error = cv2.norm(data["img_points"][j], imgpoints2, cv2.NORM_L2) / len(imgpoints2)
                 mean_error += error
-            
+
             print(f"  - Reprojection Error: {mean_error/len(data['obj_points'])}")
         else:
             print(f"Camera {i+1}: Calibration failed")
-    
+
     cv2.destroyAllWindows()
     print("\nCalibration complete. You can now use the calibration data with the main blending program.")
-
-if __name__ == "__main__":
-    run_demo()
